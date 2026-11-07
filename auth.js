@@ -77,7 +77,7 @@ async function sendAdminOtp() {
     document.querySelector('#otpStep').hidden = true;
     showMessage(`A secure sign-in link was sent to ${ADMIN_EMAIL}. Open it in this browser to continue.`, 'success');
   } catch (error) {
-    showMessage(error.message || 'Could not send the admin sign-in email.', 'error');
+    const detail = error.message || '';\n    const messageText = /email address not authorized/i.test(detail)\n      ? 'Supabase default email delivery only sends to organization team addresses. Configure custom SMTP for this administrator email.'\n      : detail || 'Could not send the admin sign-in email.';\n    showMessage(messageText, 'error');
   } finally { sendButton.disabled = false; }
 }
 
