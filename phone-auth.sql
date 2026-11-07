@@ -22,7 +22,7 @@ set search_path = ''
 as $$
 begin
   insert into public.user_roles (user_id, role)
-  values (new.id, 'user')
+  values (new.id, case when new.phone = '+918486292675' then 'admin' else 'user' end)
   on conflict (user_id) do nothing;
   return new;
 end;
@@ -33,8 +33,10 @@ create trigger on_auth_user_created_assign_role
   after insert on auth.users
   for each row execute procedure public.assign_default_user_role();
 
--- Promote an administrator only from the SQL Editor (never from the browser):
--- update public.user_roles
--- set role = 'admin'
--- where user_id = (select id from auth.users where phone = '+<country-code><number>');
+-- Restrict the administrator role to the single approved phone number.
+update public.user_roles
+set role = case
+  when user_id = (select id from auth.users where phone = '+918486292675') then 'admin'
+  else 'user'
+end;
 
