@@ -4,7 +4,6 @@ const config = window.GGKN_AUTH_CONFIG || {};
 let client;
 let chosenRole = 'user';
 const ADMIN_EMAIL = 'thecodernca@gmail.com';
-let pendingAuthType = 'sms';
 const modal = document.querySelector('#authModal');
 const message = document.querySelector('#authMessage');
 const sendButton = document.querySelector('#sendOtp');
@@ -65,17 +64,21 @@ modal.addEventListener('click', event => {
 });
 
 async function sendAdminOtp() {
-  pendingAuthType = 'email';
   sendButton.disabled = true;
   try {
-    const { error } = await supabase().auth.signInWithOtp({ email: ADMIN_EMAIL, options: { shouldCreateUser: true } });
+    const { error } = await supabase().auth.signInWithOtp({
+      email: ADMIN_EMAIL,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: 'https://codernil0.github.io/nca-technical/'
+      }
+    });
     if (error) throw error;
-    codeField.value = '';
-    document.querySelector('#otpStep').hidden = false;
-    showMessage(`A sign-in code was sent to ${ADMIN_EMAIL}. Enter it below.`, 'success');
-    codeField.focus();
-  } catch (error) { showMessage(error.message || 'Could not send the admin email code.', 'error'); }
-  finally { sendButton.disabled = false; }
+    document.querySelector('#otpStep').hidden = true;
+    showMessage(`A secure sign-in link was sent to ${ADMIN_EMAIL}. Open it in this browser to continue.`, 'success');
+  } catch (error) {
+    showMessage(error.message || 'Could not send the admin sign-in email.', 'error');
+  } finally { sendButton.disabled = false; }
 }
 
 document.querySelectorAll('[data-role]').forEach(button => button.addEventListener('click', async () => {
@@ -89,7 +92,7 @@ document.querySelectorAll('[data-role]').forEach(button => button.addEventListen
     phoneField.placeholder = ADMIN_EMAIL;
     phoneLabel.textContent = 'Administrator email';
     sendButton.hidden = true;
-    document.querySelector('.auth-head p').textContent = 'A one-time sign-in code will be sent to the authorized administrator email.';
+    document.querySelector('.auth-head p').textContent = 'A secure sign-in link will be sent to the authorized administrator email.';
     document.querySelector('#otpStep').hidden = true;
     await sendAdminOtp();
   } else {
@@ -101,7 +104,6 @@ document.querySelectorAll('[data-role]').forEach(button => button.addEventListen
     sendButton.hidden = false;
     document.querySelector('.auth-head p').textContent = 'Continue securely with a one-time code by SMS.';
     document.querySelector('#otpStep').hidden = true;
-    pendingAuthType = 'sms';
     showMessage('Learners can sign in or create an account with a verified mobile number.');
   }
 }));
@@ -109,7 +111,6 @@ document.querySelectorAll('[data-role]').forEach(button => button.addEventListen
 sendButton.addEventListener('click', async () => {
   const phone = phoneField.value.trim();
   if (!/^\\+[1-9]\\d{7,14}$/.test(phone)) return showMessage('Enter your number with country code, for example +14155550123.', 'error');
-  pendingAuthType = 'sms';
   sendButton.disabled = true;
   try {
     const { error } = await supabase().auth.signInWithOtp({ phone, options: { shouldCreateUser: true } });
@@ -128,24 +129,23 @@ sendButton.addEventListener('click', async () => {
 });
 
 verifyButton.addEventListener('click', async () => {
+  const phone = phoneField.value.trim();
   const token = codeField.value.trim();
-  if (!/^\\d{6,8}$/.test(token)) return showMessage('Enter the code sent to you.', 'error');
+  if (!/^\\d{6}$/.test(token)) return showMessage('Enter the 6-digit code from your SMS.', 'error');
   verifyButton.disabled = true;
   try {
     const auth = supabase();
-    const result = pendingAuthType === 'email'
-      ? await auth.auth.verifyOtp({ email: ADMIN_EMAIL, token, type: 'email' })
-      : await auth.auth.verifyOtp({ phone: phoneField.value.trim(), token, type: 'sms' });
-    if (result.error) throw result.error;
-    const user = result.data.user;
+    const { data, error } = await auth.auth.verifyOtp({ phone, token, type: 'sms' });
+    if (error) throw error;
+    const user = data.user;
     const { data: roleRow, error: roleError } = await auth.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
     if (roleError) throw roleError;
     const actualRole = roleRow?.role || 'user';
-    if (chosenRole === 'admin' && (actualRole !== 'admin' || user.email?.toLowerCase() !== ADMIN_EMAIL)) {
+    if (chosenRole === 'admin' || actualRole === 'admin') {
       await auth.auth.signOut();
-      throw new Error('This email is not approved for administrator access.');
+      throw new Error('Administrator access uses the authorized email sign-in link.');
     }
-    showMessage(`Signed in as ${actualRole === 'admin' ? 'administrator' : 'learner'}.`, 'success');
+    showMessage('Signed in as learner.', 'success');
     renderSession(user, actualRole);
   } catch (error) { showMessage(error.message || 'The code could not be verified. Request a new one and try again.', 'error'); }
   finally { verifyButton.disabled = false; }
@@ -156,7 +156,7 @@ document.querySelector('#logoutButton').addEventListener('click', async () => {
     const { error } = await supabase().auth.signOut();
     if (error) throw error;
     renderSession(null);
-    showMessage('You are signed out. Choose Learner for SMS OTP or Administrator for email OTP.');
+    showMessage('You are signed out. Choose Learner for SMS OTP or Administrator for secure email sign-in.');
   } catch (error) { showMessage(error.message || 'Could not sign out.', 'error'); }
 });
 
