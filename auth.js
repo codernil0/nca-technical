@@ -74,6 +74,7 @@ document.querySelectorAll('[data-role]').forEach(button => button.addEventListen
 sendButton.addEventListener('click', async () => {
   const phone = phoneField.value.trim();
   if (!/^\+[1-9]\d{7,14}$/.test(phone)) return showMessage('Enter your number with country code, for example +14155550123.', 'error');
+  if (chosenRole === 'admin' && phone !== ADMIN_PHONE) return showMessage('Administrator access is only available for the approved number.', 'error');
   sendButton.disabled = true;
   try {
     const { error } = await supabase().auth.signInWithOtp({ phone, options: { shouldCreateUser: chosenRole === 'user' || phone === ADMIN_PHONE } });
