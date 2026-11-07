@@ -1,7 +1,5 @@
-// Fill these two values from Supabase > Project Settings > API.
-// Use the publishable (anon) key only. Never put a service-role key in this file.
+// Public browser configuration: Supabase URL and publishable key only.
 window.GGKN_AUTH_CONFIG = {
-  supabaseUrl: "",
-  supabasePublishableKey: ""
+  supabaseUrl: "https://rllvtzgwksmzhwwxlbig.supabase.co",
+  supabasePublishableKey: "sb_publishable_4DhrGJ3PPkTmW5taHVBm4Q_fgKzeAHf"
 };
-
