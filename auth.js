@@ -83,8 +83,8 @@ sendButton.addEventListener('click', async () => {
     codeField.focus();
   } catch (error) {
     const detail = error.message || '';
-    const messageText = /signups not allowed for otp/i.test(detail)
-      ? 'Phone OTP signup is disabled in Supabase. Enable the Phone provider and configure its SMS provider.'
+    const messageText = /(signups not allowed for otp|unsupported phone provider|phone_provider_disabled)/i.test(detail)
+      ? 'Supabase Phone sign-in is disabled or has no SMS provider. Enable Phone and configure an SMS provider in Supabase.'
       : detail || 'Could not send the code. Check the number and try again.';
     showMessage(messageText, 'error');
   }
