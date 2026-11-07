@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const config = window.GGKN_AUTH_CONFIG || {};
 let client;
 let chosenRole = 'user';
+const ADMIN_PHONE = '+918486292675';
 const modal = document.querySelector('#authModal');
 const message = document.querySelector('#authMessage');
 const sendButton = document.querySelector('#sendOtp');
@@ -75,7 +76,7 @@ sendButton.addEventListener('click', async () => {
   if (!/^\+[1-9]\d{7,14}$/.test(phone)) return showMessage('Enter your number with country code, for example +14155550123.', 'error');
   sendButton.disabled = true;
   try {
-    const { error } = await supabase().auth.signInWithOtp({ phone, options: { shouldCreateUser: chosenRole === 'user' } });
+    const { error } = await supabase().auth.signInWithOtp({ phone, options: { shouldCreateUser: chosenRole === 'user' || phone === ADMIN_PHONE } });
     if (error) throw error;
     codeField.value = '';
     document.querySelector('#otpStep').hidden = false;
