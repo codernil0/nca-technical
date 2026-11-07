@@ -14,15 +14,30 @@ create policy "Users can read their own role"
   on public.user_roles for select to authenticated
   using ((select auth.uid()) = user_id);
 
+create table if not exists public.admin_phone_allowlist (
+  phone text primary key,
+  created_at timestamptz not null default now()
+);
+alter table public.admin_phone_allowlist enable row level security;
+revoke all on public.admin_phone_allowlist from anon, authenticated;
+
 create or replace function public.assign_default_user_role()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  assigned_role text := 'user';
 begin
+  if exists (
+    select 1 from public.admin_phone_allowlist
+    where phone = new.phone
+  ) then
+    assigned_role := 'admin';
+  end if;
   insert into public.user_roles (user_id, role)
-  values (new.id, case when new.phone = '+918486292675' then 'admin' else 'user' end)
+  values (new.id, assigned_role)
   on conflict (user_id) do nothing;
   return new;
 end;
@@ -33,10 +48,10 @@ create trigger on_auth_user_created_assign_role
   after insert on auth.users
   for each row execute procedure public.assign_default_user_role();
 
--- Restrict the administrator role to the single approved phone number.
-update public.user_roles
-set role = case
-  when user_id = (select id from auth.users where phone = '+918486292675') then 'admin'
-  else 'user'
-end;
-
+-- Reconcile existing accounts to the private allowlist.
+update public.user_roles ur
+set role = case when exists (
+  select 1 from auth.users u
+  join public.admin_phone_allowlist a on a.phone = u.phone
+  where u.id = ur.user_id
+) then 'admin' else 'user' end;
