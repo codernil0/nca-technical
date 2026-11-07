@@ -3,6 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const config = window.GGKN_AUTH_CONFIG || {};
 let client;
 let chosenRole = 'user';
+const ADMIN_EMAIL = 'thecodernca@gmail.com';
+let pendingAuthType = 'sms';
 const modal = document.querySelector('#authModal');
 const message = document.querySelector('#authMessage');
 const sendButton = document.querySelector('#sendOtp');
@@ -18,7 +20,7 @@ function showMessage(text, kind = '') {
 
 function supabase() {
   if (!config.supabaseUrl || !config.supabasePublishableKey) {
-    throw new Error('Mobile sign-in is not configured yet. The site owner must connect Supabase Auth and an SMS provider.');
+    throw new Error('Supabase sign-in is not configured yet.');
   }
   if (!client) client = createClient(config.supabaseUrl, config.supabasePublishableKey);
   return client;
@@ -62,17 +64,52 @@ modal.addEventListener('click', event => {
   if (event.target === modal && document.body.classList.contains('auth-required')) event.preventDefault();
 });
 
-document.querySelectorAll('[data-role]').forEach(button => button.addEventListener('click', () => {
+async function sendAdminOtp() {
+  pendingAuthType = 'email';
+  sendButton.disabled = true;
+  try {
+    const { error } = await supabase().auth.signInWithOtp({ email: ADMIN_EMAIL, options: { shouldCreateUser: true } });
+    if (error) throw error;
+    codeField.value = '';
+    document.querySelector('#otpStep').hidden = false;
+    showMessage(`A sign-in code was sent to ${ADMIN_EMAIL}. Enter it below.`, 'success');
+    codeField.focus();
+  } catch (error) { showMessage(error.message || 'Could not send the admin email code.', 'error'); }
+  finally { sendButton.disabled = false; }
+}
+
+document.querySelectorAll('[data-role]').forEach(button => button.addEventListener('click', async () => {
   chosenRole = button.dataset.role;
   document.querySelectorAll('[data-role]').forEach(option => option.classList.toggle('active', option === button));
-  showMessage(chosenRole === 'admin'
-    ? 'Administrator sign-in is restricted to phone numbers approved by the site owner.'
-    : 'Learners can sign in or create an account with a verified mobile number.');
+  const phoneLabel = document.querySelector('label[for="authPhone"]');
+  if (chosenRole === 'admin') {
+    phoneField.type = 'email';
+    phoneField.value = ADMIN_EMAIL;
+    phoneField.readOnly = true;
+    phoneField.placeholder = ADMIN_EMAIL;
+    phoneLabel.textContent = 'Administrator email';
+    sendButton.hidden = true;
+    document.querySelector('.auth-head p').textContent = 'A one-time sign-in code will be sent to the authorized administrator email.';
+    document.querySelector('#otpStep').hidden = true;
+    await sendAdminOtp();
+  } else {
+    phoneField.type = 'tel';
+    phoneField.value = '';
+    phoneField.readOnly = false;
+    phoneField.placeholder = '+1 415 555 0123';
+    phoneLabel.textContent = 'Mobile number';
+    sendButton.hidden = false;
+    document.querySelector('.auth-head p').textContent = 'Continue securely with a one-time code by SMS.';
+    document.querySelector('#otpStep').hidden = true;
+    pendingAuthType = 'sms';
+    showMessage('Learners can sign in or create an account with a verified mobile number.');
+  }
 }));
 
 sendButton.addEventListener('click', async () => {
   const phone = phoneField.value.trim();
-  if (!/^\+[1-9]\d{7,14}$/.test(phone)) return showMessage('Enter your number with country code, for example +14155550123.', 'error');
+  if (!/^\\+[1-9]\\d{7,14}$/.test(phone)) return showMessage('Enter your number with country code, for example +14155550123.', 'error');
+  pendingAuthType = 'sms';
   sendButton.disabled = true;
   try {
     const { error } = await supabase().auth.signInWithOtp({ phone, options: { shouldCreateUser: true } });
@@ -87,26 +124,26 @@ sendButton.addEventListener('click', async () => {
       ? 'Supabase Phone sign-in is disabled or has no SMS provider. Enable Phone and configure an SMS provider in Supabase.'
       : detail || 'Could not send the code. Check the number and try again.';
     showMessage(messageText, 'error');
-  }
-  finally { sendButton.disabled = false; }
+  } finally { sendButton.disabled = false; }
 });
 
 verifyButton.addEventListener('click', async () => {
-  const phone = phoneField.value.trim();
   const token = codeField.value.trim();
-  if (!/^\d{6}$/.test(token)) return showMessage('Enter the 6-digit code from your SMS.', 'error');
+  if (!/^\\d{6,8}$/.test(token)) return showMessage('Enter the code sent to you.', 'error');
   verifyButton.disabled = true;
   try {
     const auth = supabase();
-    const { data, error } = await auth.auth.verifyOtp({ phone, token, type: 'sms' });
-    if (error) throw error;
-    const user = data.user;
+    const result = pendingAuthType === 'email'
+      ? await auth.auth.verifyOtp({ email: ADMIN_EMAIL, token, type: 'email' })
+      : await auth.auth.verifyOtp({ phone: phoneField.value.trim(), token, type: 'sms' });
+    if (result.error) throw result.error;
+    const user = result.data.user;
     const { data: roleRow, error: roleError } = await auth.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
     if (roleError) throw roleError;
     const actualRole = roleRow?.role || 'user';
-    if (chosenRole === 'admin' && actualRole !== 'admin') {
+    if (chosenRole === 'admin' && (actualRole !== 'admin' || user.email?.toLowerCase() !== ADMIN_EMAIL)) {
       await auth.auth.signOut();
-      throw new Error('This phone number is not approved for administrator access.');
+      throw new Error('This email is not approved for administrator access.');
     }
     showMessage(`Signed in as ${actualRole === 'admin' ? 'administrator' : 'learner'}.`, 'success');
     renderSession(user, actualRole);
@@ -119,14 +156,14 @@ document.querySelector('#logoutButton').addEventListener('click', async () => {
     const { error } = await supabase().auth.signOut();
     if (error) throw error;
     renderSession(null);
-    showMessage('You are signed out. Choose an access type and verify your mobile number to continue.');
+    showMessage('You are signed out. Choose Learner for SMS OTP or Administrator for email OTP.');
   } catch (error) { showMessage(error.message || 'Could not sign out.', 'error'); }
 });
 
 async function loadSession() {
   if (!config.supabaseUrl || !config.supabasePublishableKey) {
     renderSession(null);
-    showMessage('Mobile sign-in is awaiting Supabase and SMS provider setup.');
+    showMessage('Supabase sign-in is not configured yet.');
     return;
   }
   try {
