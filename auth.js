@@ -77,7 +77,11 @@ async function sendAdminOtp() {
     document.querySelector('#otpStep').hidden = true;
     showMessage(`A secure sign-in link was sent to ${ADMIN_EMAIL}. Open it in this browser to continue.`, 'success');
   } catch (error) {
-    const detail = error.message || '';\n    const messageText = /email address not authorized/i.test(detail)\n      ? 'Supabase default email delivery only sends to organization team addresses. Configure custom SMTP for this administrator email.'\n      : detail || 'Could not send the admin sign-in email.';\n    showMessage(messageText, 'error');
+    const detail = error.message || '';
+    const messageText = /email address not authorized/i.test(detail)
+      ? 'Supabase default email delivery only sends to organization team addresses. Configure custom SMTP for this administrator email.'
+      : detail || 'Could not send the admin sign-in email.';
+    showMessage(messageText, 'error');
   } finally { sendButton.disabled = false; }
 }
 
@@ -110,7 +114,7 @@ document.querySelectorAll('[data-role]').forEach(button => button.addEventListen
 
 sendButton.addEventListener('click', async () => {
   const phone = phoneField.value.trim();
-  if (!/^\\+[1-9]\\d{7,14}$/.test(phone)) return showMessage('Enter your number with country code, for example +14155550123.', 'error');
+  if (!/^\+[1-9]\d{7,14}$/.test(phone)) return showMessage('Enter your number with country code, for example +14155550123.', 'error');
   sendButton.disabled = true;
   try {
     const { error } = await supabase().auth.signInWithOtp({ phone, options: { shouldCreateUser: true } });
@@ -131,7 +135,7 @@ sendButton.addEventListener('click', async () => {
 verifyButton.addEventListener('click', async () => {
   const phone = phoneField.value.trim();
   const token = codeField.value.trim();
-  if (!/^\\d{6}$/.test(token)) return showMessage('Enter the 6-digit code from your SMS.', 'error');
+  if (!/^\d{6}$/.test(token)) return showMessage('Enter the 6-digit code from your SMS.', 'error');
   verifyButton.disabled = true;
   try {
     const auth = supabase();
