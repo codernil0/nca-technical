@@ -3,7 +3,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const config = window.GGKN_AUTH_CONFIG || {};
 let client;
 let chosenRole = 'user';
-const ADMIN_PHONE = '+918486292675';
 const modal = document.querySelector('#authModal');
 const message = document.querySelector('#authMessage');
 const sendButton = document.querySelector('#sendOtp');
@@ -74,16 +73,21 @@ document.querySelectorAll('[data-role]').forEach(button => button.addEventListen
 sendButton.addEventListener('click', async () => {
   const phone = phoneField.value.trim();
   if (!/^\+[1-9]\d{7,14}$/.test(phone)) return showMessage('Enter your number with country code, for example +14155550123.', 'error');
-  if (chosenRole === 'admin' && phone !== ADMIN_PHONE) return showMessage('Administrator access is only available for the approved number.', 'error');
   sendButton.disabled = true;
   try {
-    const { error } = await supabase().auth.signInWithOtp({ phone, options: { shouldCreateUser: chosenRole === 'user' || phone === ADMIN_PHONE } });
+    const { error } = await supabase().auth.signInWithOtp({ phone, options: { shouldCreateUser: true } });
     if (error) throw error;
     codeField.value = '';
     document.querySelector('#otpStep').hidden = false;
     showMessage('A verification code was sent by SMS. Enter it below to continue.', 'success');
     codeField.focus();
-  } catch (error) { showMessage(error.message || 'Could not send the code. Check the number and try again.', 'error'); }
+  } catch (error) {
+    const detail = error.message || '';
+    const messageText = /signups not allowed for otp/i.test(detail)
+      ? 'Phone OTP signup is disabled in Supabase. Enable the Phone provider and configure its SMS provider.'
+      : detail || 'Could not send the code. Check the number and try again.';
+    showMessage(messageText, 'error');
+  }
   finally { sendButton.disabled = false; }
 });
 
